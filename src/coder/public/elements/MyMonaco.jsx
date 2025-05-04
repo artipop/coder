@@ -30,6 +30,9 @@ export default function MonacoEditorComponent() {
     // const pyScript = newScript("https://pyscript.net/releases/2025.3.1/core.js", null);
     const pyScript = newScript("https://cdn.jsdelivr.net/pyodide/v0.27.5/full/pyodide.js", initializePyodide);
     document.head.appendChild(pyScript);
+    const swaggerScript = newScript("https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js", initializeSwagger);
+    swaggerScript.crossorigin = true;
+    document.head.appendChild(swaggerScript);
 
     function initializeMonaco() {
       // Configure the path to Monaco modules via CDN
@@ -38,6 +41,16 @@ export default function MonacoEditorComponent() {
       });
       // Load the main editor module and initialize it
       window.require(["vs/editor/editor.main"], initializeEditor);
+    }
+    function initializeSwagger() {
+      window.require.config({
+        paths: { vs: "https://unpkg.com/monaco-editor@0.52.2/min/vs" },
+      });
+
+      window.ui = SwaggerUIBundle({
+          url: 'https://petstore3.swagger.io/api/v3/openapi.json',
+          dom_id: '#swagger-ui',
+        });
     }
     async function initializePyodide() {
       let pyodide = await loadPyodide();
@@ -87,6 +100,7 @@ export default function MonacoEditorComponent() {
 
   return (
     <div className="h-full w-full relative">
+    <div id="swagger-ui"></div>
       <py-script>
         import datetime as dt
 pyscript.write('today', dt.date.today().strftime('%A %B %d, %Y'))
