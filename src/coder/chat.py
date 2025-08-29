@@ -1,26 +1,32 @@
 import re
 import uuid
 from operator import itemgetter
-
+from os import environ
 from typing import Optional, Dict, List
 
 import chainlit as cl
+from chainlit.oauth_providers import providers
 from chainlit.types import CommandDict
 from gitingest import ingest
-from langchain.chains import LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda, RunnableConfig, Runnable
 from langchain_openai import ChatOpenAI
-from starlette.config import environ
 
 from prompts import SYS_PROMPT
 from tochka_client import TochkaClient
 
+# change scope to get access Google Drive & Docs APIs
+if providers:
+    for provider in providers:
+        if provider.id == "google":
+            provider.authorize_params["scope"] = "https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/documents.readonly https://www.googleapis.com/auth/drive.readonly"
+
 commands = [
     CommandDict(id="github", description="Помоги разобраться с github репозиторием", icon="image", button=False,
                 persistent=False),
+    CommandDict(id="gdocs", description="Выбрать Google-документы", icon="image", button=False, persistent=False),
     CommandDict(id="purchase", description="Оплатить подписку", icon="image", button=False, persistent=False),
 ]
 
@@ -77,12 +83,39 @@ async def on_start():
     # await open_editor()
 
 
+def google_actions():
+    return [
+        cl.Action(
+            name="select_shared_docs",
+            icon="mouse-pointer-click",
+            payload={"value": "example_value"},
+            # label="all chats"
+            label="всех чатов"
+        ),
+    ]
+
+
 @cl.action_callback("renew_subscription_button")
 async def on_action(action):
     payment_link = await generate_payment_link()
     await cl.Message(content=f"[Ссылка на оплату]({payment_link})").send()
     # Optionally remove the action button from the chatbot user interface
     await action.remove()
+
+
+@cl.action_callback("select_shared_docs")
+async def on_select_shared_docs(action: cl.Action):
+    custom_element = cl.CustomElement(
+        name="DocumentPage",
+        # props={"documents": documents},
+        display="inline",
+    )
+    await cl.Message(
+        content="Список ваших документов:",
+        elements=[custom_element],
+    ).send()
+    # Optionally remove the action button from the chatbot user interface
+    # await action.remove()
 
 
 # `on_resume` impl is required for the chat history feature and more
@@ -109,10 +142,11 @@ async def on_message(message: cl.Message):
         return
     elif message.command == "github":
         content = message.content
-        pattern: str = r'(https?://(?:www\.)?github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:/)?'
-        matches: List[str] = re.findall(pattern, content)
+        github_url_pattern: str = r'(https?://(?:www\.)?github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:/)?'
+        matches: List[str] = re.findall(github_url_pattern, content)
         if len(matches) == 0:
-            await cl.Message(content="Повтори комманду со ссылкой на репозиторий").send()
+            # TODO: посылать "отправь ссылку на репозиторий"
+            await cl.Message(content="Повтори команду со ссылкой на репозиторий").send()
             return
         if len(matches) > 1:
             await cl.Message(
@@ -123,12 +157,23 @@ async def on_message(message: cl.Message):
         memory = cl.user_session.get("memory")  # type: ConversationBufferMemory
         runnable = cl.user_session.get("runnable")  # type: Runnable
         await runnable.ainvoke(
-                {"question": content},
-                config=RunnableConfig(callbacks=[cl.LangchainCallbackHandler()]),
+            {"question": content},
+            config=RunnableConfig(callbacks=[cl.LangchainCallbackHandler()]),
         )
         memory.chat_memory.add_user_message(content)
         info = parse_repository_info(summary)
         await cl.Message(content=f"Проанализирован репозиторий {info['repository']}").send()
+    elif message.command == "gdocs":
+        custom_element = cl.CustomElement(
+            name="DocumentPage",
+            # props={"documents": documents},
+            display="inline",
+        )
+        # Или мы можем послать сообщение с `actions=google_actions()`
+        # и по нажатию на экшен уже посылать это сообщение
+        cl_message = cl.Message(content="Список ваших документов:", elements=[custom_element], )
+        await cl_message.send()
+        # await cl_message.remove() # TODO: как-то удалять с фронта
         return
     memory = cl.user_session.get("memory")  # type: ConversationBufferMemory
 
