@@ -12,5 +12,7 @@ RUN poetry install --no-root
 
 COPY ./src/coder .
 
-#CMD ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
-CMD ["poetry", "run", "chainlit", "run", "app.py", "--host", "0.0.0.0", "--port", "80"]
+# for fastapi based config
+CMD ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
+# for chainlit without fastapi
+#CMD ["poetry", "run", "chainlit", "run", "app.py", "--host", "0.0.0.0", "--port", "80"]
