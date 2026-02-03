@@ -3,7 +3,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 
-async def gdoc_content_by_id(doc_id, token):
+async def gdoc_content_by_id(token, doc_id):
     creds = Credentials(token=token)
     try:
         service = build("docs", "v1", credentials=creds)
@@ -14,7 +14,7 @@ async def gdoc_content_by_id(doc_id, token):
         raise err
 
 
-async def list_all_gdocs(token, pageSize, pageToken):
+async def list_all_gdocs(token, page_size, page_token):
     creds = Credentials(token=token)
     try:
         service = build("drive", "v3", credentials=creds)
@@ -22,8 +22,8 @@ async def list_all_gdocs(token, pageSize, pageToken):
             service.files()
             .list(
                 q="mimeType='application/vnd.google-apps.document'",
-                pageSize=pageSize,
-                pageToken=pageToken if pageToken else None,
+                pageSize=page_size,
+                pageToken=page_token if page_token else None,
                 fields="nextPageToken,files(id,name)",
             )
             .execute()

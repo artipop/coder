@@ -5,6 +5,7 @@ from os import environ
 from typing import Optional, Dict, List
 
 import chainlit as cl
+from chainlit.input_widget import TextInput
 from chainlit.oauth_providers import providers
 from chainlit.types import CommandDict
 from gitingest import ingest
@@ -15,13 +16,15 @@ from langchain_core.runnables import RunnablePassthrough, RunnableLambda, Runnab
 from langchain_openai import ChatOpenAI
 
 from prompts import SYS_PROMPT
+from token_generator import generate_token
 from tochka_client import TochkaClient
 
 # change scope to get access Google Drive & Docs APIs
 if providers:
     for provider in providers:
         if provider.id == "google":
-            provider.authorize_params["scope"] = "https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/documents.readonly https://www.googleapis.com/auth/drive.readonly"
+            provider.authorize_params[
+                "scope"] = "https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/documents.readonly https://www.googleapis.com/auth/drive.readonly"
 
 commands = [
     CommandDict(id="github", description="Помоги разобраться с github репозиторием", icon="image", button=False,
@@ -74,6 +77,19 @@ async def on_start():
 
     cl.user_session.set("chat_messages", [])
 
+    user: cl.User = cl.user_session.get("user")
+    iii_ = user.metadata["iii"]
+    # if not iii_:
+    #     cl.user_session.set("iii", uuid.uuid4().__str__())
+    settings = await cl.ChatSettings(
+        [
+            TextInput(
+                id="Model",
+                label="API Token",
+                initial=iii_,
+                description="Copy this API Token. Change of the value has no affect."
+            ),
+        ]).send()
     # uncomment when subscription will be persisted
     # if False:
     #     actions = [
@@ -132,6 +148,18 @@ async def on_chat_resume(thread):
     cl.user_session.set("memory", memory)
 
     setup_runnable()
+
+    user: cl.User = cl.user_session.get("user")
+    iii_ = user.metadata["iii"]
+    settings = await cl.ChatSettings(
+        [
+            TextInput(
+                id="Model",
+                label="API Token",
+                initial=iii_,
+                description="Copy this API Token. Change of the value has no affect."
+            ),
+        ]).send()
 
 
 @cl.on_message
@@ -211,7 +239,18 @@ def oauth_callback(
 ) -> Optional[cl.User]:
     # save this 'token' to use it later for some API calls
     default_user.metadata['token'] = token
+    if not "iii" in default_user.metadata:
+        s = generate_token(default_user.identifier)
+        print(s)
+        default_user.metadata['iii'] = s
     return default_user
+
+
+# TODO: use settings `Switch` to turn on google & yandex
+@cl.on_settings_update
+async def on_settings_update(settings):
+    print("Settings updated ", settings)
+    # print(f"Option selected: {settings["Options"]}")
 
 
 # Util
